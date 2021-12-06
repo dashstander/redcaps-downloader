@@ -134,12 +134,17 @@ def download_anns(
     "-j", "--workers", type=int, default=4,
     help="Number of workers to download images in parallel.",
 )
+@click.option(
+    "--resume/--no-resume", default=True,
+    help="""For continuing a cancelled download. Checks whether or not images exist before trying to download them.""",
+)
 def download_imgs(
     annotations_filepath: str,
     save_to: str,
     resize: int,
     update_annotations: bool,
     workers: int,
+    resume: bool,
 ):
     # Load annotations to download images. Image URL available as "url".
     ANNOTATIONS: Dict[str, Any] = json.load(open(annotations_filepath))
@@ -153,7 +158,7 @@ def download_imgs(
             image_savepath = os.path.join(
                 save_to, ann["subreddit"], f"{ann['image_id']}.jpg"
             )
-            worker_args.append((ann["url"], image_savepath, image_downloader))
+            worker_args.append((ann["url"], image_savepath, image_downloader, resume))
 
         # Collect download status of images in these annotations (True/False).
         download_status: List[bool] = []
@@ -184,8 +189,9 @@ def download_imgs(
 
 def _image_worker(args):
     r"""Helper method for parallelizing image downloads."""
-    image_url, image_savepath, image_downloader = args
-
+    image_url, image_savepath, image_downloader, resume = args
+    if resume and os.path.exists(image_savepath):
+        return True
     download_status = image_downloader.download(image_url, save_to=image_savepath)
 
     # Sleep for 2 seconds for Imgur, and 0.1 seconds for Reddit and Flickr.
